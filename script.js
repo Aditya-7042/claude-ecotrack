@@ -223,11 +223,9 @@ Write a concise analysis in exactly 3 short paragraphs:
 Format: Use **bold** for key terms. Max 160 words. Be direct and technical.`;
 
     try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+        const res = await fetch('/api/ai', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 
-                "x-api-key": "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",
-        "anthropic-version": "2023-06-01"
             },
             body: JSON.stringify({
                 model: "claude-3-5-sonnet-20241022",
@@ -286,11 +284,10 @@ Answer in 2-4 sentences. Use **bold** for key terms. Be specific and practical.`
     chatHistory.push({ role: 'user', content: userMsg });
 
     try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+        const res = await fetch('/api/ai', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 
-                "x-api-key": "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",
-        "anthropic-version": "2023-06-01" },
+                 },
             body: JSON.stringify({
                 model: "claude-3-5-sonnet-20241022",
                 max_tokens: 1000,
