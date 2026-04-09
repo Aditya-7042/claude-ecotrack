@@ -9,6 +9,7 @@ import { getDatabase, ref, set, push } from "https://www.gstatic.com/firebasejs/
 // ============================================================
 const isSimulation = false;
 
+
 // ── Firebase ──────────────────────────────────────────────────
 const firebaseConfig = {
     apiKey: "AIzaSyCjJr9RfRARGbEOucL5-8EU6b-o-dtZxyg",
@@ -224,9 +225,12 @@ Format: Use **bold** for key terms. Max 160 words. Be direct and technical.`;
     try {
         const res = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 
+                "x-api-key": "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",
+        "anthropic-version": "2023-06-01"
+            },
             body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
+                model: 'claude-3-5-sonnet-20241022',
                 max_tokens: 1000,
                 messages: [{ role: 'user', content: prompt }]
             })
@@ -284,9 +288,11 @@ Answer in 2-4 sentences. Use **bold** for key terms. Be specific and practical.`
     try {
         const res = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 
+                "x-api-key": "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",
+        "anthropic-version": "2023-06-01" },
             body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
+                model: 'claude-3-5-sonnet-20241022',
                 max_tokens: 1000,
                 system: systemPrompt,
                 messages: chatHistory
