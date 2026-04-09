@@ -230,7 +230,7 @@ Format: Use **bold** for key terms. Max 160 words. Be direct and technical.`;
         "anthropic-version": "2023-06-01"
             },
             body: JSON.stringify({
-                model: 'claude-3-5-sonnet-20241022',
+                model: "claude-3-5-sonnet-20241022",
                 max_tokens: 1000,
                 messages: [{ role: 'user', content: prompt }]
             })
@@ -292,7 +292,7 @@ Answer in 2-4 sentences. Use **bold** for key terms. Be specific and practical.`
                 "x-api-key": "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",
         "anthropic-version": "2023-06-01" },
             body: JSON.stringify({
-                model: 'claude-3-5-sonnet-20241022',
+                model: "claude-3-5-sonnet-20241022",
                 max_tokens: 1000,
                 system: systemPrompt,
                 messages: chatHistory
