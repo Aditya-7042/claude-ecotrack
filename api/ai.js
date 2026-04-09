@@ -17,5 +17,10 @@ export default async function handler(req, res) {
   });
 
   const data = await response.json();
-  res.status(200).json(data);
+
+console.log("===== ANTHROPIC RESPONSE =====");
+console.log(JSON.stringify(data, null, 2));
+console.log("===== END RESPONSE =====");
+
+res.status(200).json(data);
 }
