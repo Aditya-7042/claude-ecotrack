@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>EcoTrack 2026 | AI Carbon Auditor</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<div class="dashboard">
+
+  <!-- HEADER -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">ECO<span>TRACK</span></div>
+      <div class="brand-sub">AI Carbon Auditor · v2.0</div>
+    </div>
+    <div class="header-meta">
+      <div id="status-badge">● LIVE</div>
+      <div class="session-id">SID: <span id="session-label">—</span></div>
+    </div>
+  </header>
+
+  <!-- TOP STATS: 3 main cards -->
+  <section class="stats-grid">
+    <div class="card" id="card-data">
+      <div class="card-top">
+        <span class="card-icon">↓</span>
+        <span class="card-label">Data Transferred</span>
+      </div>
+      <div class="card-value" id="data-val">0.00 MB</div>
+      <div class="card-sub" id="data-sub">Awaiting audit...</div>
+    </div>
+
+    <div class="card" id="card-cpu">
+      <div class="card-top">
+        <span class="card-icon">⚡</span>
+        <span class="card-label">CPU Pressure</span>
+      </div>
+      <div class="card-value" id="cpu-val">Checking...</div>
+      <div class="card-sub">Hardware state</div>
+    </div>
+
+    <div class="card accent" id="card-carbon">
+      <div class="card-top">
+        <span class="card-icon">🌿</span>
+        <span class="card-label">Carbon Impact</span>
+      </div>
+      <div class="card-value" id="carbon-val">0.00 mg</div>
+      <div class="card-sub" id="carbon-sub">CO₂ equivalent</div>
+    </div>
+  </section>
+
+  <!-- SECONDARY STATS: 3 insight cards -->
+  <section class="stats-grid secondary">
+    <div class="card" id="card-rating">
+      <div class="card-top">
+        <span class="card-icon">★</span>
+        <span class="card-label">Green Rating</span>
+      </div>
+      <div class="card-value" id="rating-val">—</div>
+      <div class="card-sub" id="rating-sub">Efficiency grade</div>
+    </div>
+
+    <div class="card" id="card-equiv">
+      <div class="card-top">
+        <span class="card-icon">≈</span>
+        <span class="card-label">Real-World Equiv.</span>
+      </div>
+      <div class="card-value small" id="equiv-val">—</div>
+      <div class="card-sub">Carbon context</div>
+    </div>
+
+    <div class="card" id="card-visits">
+      <div class="card-top">
+        <span class="card-icon">👥</span>
+        <span class="card-label">1K Visits/day</span>
+      </div>
+      <div class="card-value" id="visits-val">—</div>
+      <div class="card-sub" id="visits-sub">Est. daily CO₂</div>
+    </div>
+  </section>
+
+  <!-- CHART -->
+  <section class="panel chart-panel">
+    <div class="panel-header">
+      <span class="panel-title">Carbon Trend</span>
+      <span class="panel-meta" id="chart-meta">Live data</span>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="carbonChart"></canvas>
+    </div>
+  </section>
+
+  <!-- AI ADVISOR -->
+  <section class="panel ai-panel">
+    <div class="panel-header">
+      <span class="panel-title">⬡ AI Carbon Advisor</span>
+      <span class="ai-tag">Claude AI</span>
+    </div>
+    <div id="ai-advisor-box" class="ai-box">
+      <div class="ai-idle">
+        <div class="idle-dot"></div>
+        <span>AI analysis will appear after audit completes...</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI CHAT -->
+  <section class="panel chat-panel">
+    <div class="panel-header">
+      <span class="panel-title">💬 Ask AI</span>
+      <span class="panel-meta">Context-aware assistant</span>
+    </div>
+
+    <div id="chat-messages" class="chat-log"></div>
+
+    <div class="chat-suggestions">
+      <button class="chip" onclick="quickAsk('How can I reduce my carbon impact?')">How to reduce?</button>
+      <button class="chip" onclick="quickAsk('What causes the most emissions on a web page?')">Main causes?</button>
+      <button class="chip" onclick="quickAsk('Compare my score to average websites')">Compare score</button>
+      <button class="chip" onclick="quickAsk('Give me 5 practical green web tips')">Green tips</button>
+    </div>
+
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" placeholder="Ask about carbon, energy, or optimization..." />
+      <button id="send-btn">→</button>
+    </div>
+  </section>
+
+  <!-- SIM CONTROLS -->
+  <div id="sim-controls" class="sim-controls">
+    <button id="start-btn">▶ Start Simulation</button>
+    <button id="stop-btn" class="stop">■ Stop</button>
+  </div>
+
+</div>
+
+<script type="module" src="script.js"></script>
+</body>
+</html>
