@@ -24,3 +24,4 @@ console.log("===== END RESPONSE =====");
 
 res.status(200).json(data);
 }
+console.log("KEY CHECK:", process.env.ANTHROPIC_API_KEY);
