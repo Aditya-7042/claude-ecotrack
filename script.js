@@ -228,7 +228,7 @@ Format: Use **bold** for key terms. Max 160 words. Be direct and technical.`;
             headers: { 'Content-Type': 'application/json', 
             },
             body: JSON.stringify({
-            message: prompt
+            message: prompt + "\n\nBe precise and helpful."
 })
         });
         const data = await res.json();
@@ -287,7 +287,7 @@ Answer in 2-4 sentences. Use **bold** for key terms. Be specific and practical.`
             headers: { 'Content-Type': 'application/json', 
                  },
             body: JSON.stringify({
-    message: userMsg
+  message: systemPrompt + "\n\nUser: " + userMsg
 })
         });
         const data = await res.json();
