@@ -206,7 +206,7 @@ async function runAIAdvisor(mb, carbonMg, rating) {
     box.innerHTML = `
         <div class="ai-loading">
             <div class="dots"><span>.</span><span>.</span><span>.</span></div>
-            <span>Claude is analysing your audit data...</span>
+            <span>AI is analysing your audit data...</span>
         </div>`;
 
     const prompt = `You are EcoTrack's AI Carbon Advisor. A webpage was audited:
@@ -228,13 +228,11 @@ Format: Use **bold** for key terms. Max 160 words. Be direct and technical.`;
             headers: { 'Content-Type': 'application/json', 
             },
             body: JSON.stringify({
-                model: "claude-3-5-sonnet-20241022",
-                max_tokens: 1000,
-                messages: [{ role: 'user', content: prompt }]
-            })
+    message: prompt
+})
         });
         const data = await res.json();
-        const text = data.content?.map(b => b.text || '').join('') || 'No response.';
+        const text = data.reply || 'No response.';
 
         const html = text
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -289,14 +287,11 @@ Answer in 2-4 sentences. Use **bold** for key terms. Be specific and practical.`
             headers: { 'Content-Type': 'application/json', 
                  },
             body: JSON.stringify({
-                model: "claude-3-5-sonnet-20241022",
-                max_tokens: 1000,
-                system: systemPrompt,
-                messages: chatHistory
+                messages:userMsg
             })
         });
         const data = await res.json();
-        const reply = data.content?.map(b => b.text || '').join('') || 'Sorry, no response.';
+        const reply = data.reply || 'Sorry, no response.';
         chatHistory.push({ role: 'assistant', content: reply });
 
         chatLog.removeChild(thinkEl);
