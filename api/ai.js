@@ -2,6 +2,10 @@ export default async function handler(req, res) {
   try {
     const { message } = req.body;
 
+    if (!message) {
+      return res.status(400).json({ reply: "No message provided" });
+    }
+
     console.log("Incoming message:", message);
     console.log("API KEY EXISTS:", !!process.env.GEMINI_API_KEY);
 
@@ -28,26 +32,43 @@ export default async function handler(req, res) {
     console.log("===== GEMINI RESPONSE =====");
     console.log(JSON.stringify(data, null, 2));
 
-    // 🚨 SHOW REAL ERROR
+    // 🚨 Handle API error
     if (data.error) {
       return res.status(500).json({
         reply: "API ERROR: " + data.error.message
       });
     }
 
-    let reply = "No response from AI.";
+    let reply = "";
 
-    if (data.candidates && data.candidates.length > 0) {
-      const parts = data.candidates[0].content?.parts;
-      if (parts && parts.length > 0) {
-        reply = parts.map(p => p.text || "").join("");
+    // ✅ SAFER parsing
+    if (data.candidates?.length > 0) {
+      const candidate = data.candidates[0];
+
+      // normal text response
+      if (candidate.content?.parts) {
+        reply = candidate.content.parts
+          .map(p => p.text || "")
+          .join("");
+      }
+
+      // blocked or no text
+      if (!reply && candidate.finishReason) {
+        reply = `AI blocked response (${candidate.finishReason})`;
       }
     }
 
-    res.status(200).json({ reply });
+    // 🚨 FINAL fallback
+    if (!reply) {
+      reply = "DEBUG: " + JSON.stringify(data);
+    }
+
+    return res.status(200).json({ reply });
 
   } catch (err) {
     console.error("AI ERROR:", err);
-    res.status(500).json({ reply: "Server error" });
+    return res.status(500).json({
+      reply: "Server error: " + err.message
+    });
   }
 }
