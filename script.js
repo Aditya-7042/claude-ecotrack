@@ -7,7 +7,7 @@ import { getDatabase, ref, set, push } from "https://www.gstatic.com/firebasejs/
 //  false → Real mode  (Vercel deployed)
 //  true  → Simulation (local dev / demo)
 // ============================================================
-const isSimulation = false;
+const isSimulation = true;
 
 
 // ── Firebase ──────────────────────────────────────────────────
@@ -25,6 +25,11 @@ const analytics = getAnalytics(app);
 const db = getDatabase(app);
 const sessionId = "session_" + Date.now();
 document.getElementById('session-label').textContent = sessionId.slice(-8);
+const API_BASE_URL = resolveApiBaseUrl();
+const apiAvailability = {
+    audit: API_BASE_URL !== null,
+    ai: API_BASE_URL !== null
+};
 
 // ── State ─────────────────────────────────────────────────────
 let totalBytes   = 0;
@@ -111,15 +116,82 @@ function fmtMg(mg) {
     return mg >= 1000 ? (mg / 1000).toFixed(3) + ' g' : mg.toFixed(2) + ' mg';
 }
 
-// ── Core update ───────────────────────────────────────────────
-async function updateUI(bytes) {
+function calculateAuditLocally(bytes) {
+    const inputBytes = Number(bytes);
+    const safeBytes = Number.isFinite(inputBytes) && inputBytes >= 0 ? inputBytes : 0;
+    const KWH_PER_GB = 0.06;
+    const CARBON_INTENSITY = 475;
+    const gb = safeBytes / (1024 ** 3);
+    const energyKwh = gb * KWH_PER_GB;
+    const carbonG = energyKwh * CARBON_INTENSITY;
+    const carbonMg = carbonG * 1000;
+
+    return {
+        success: true,
+        carbonMg: Number(carbonMg.toFixed(2)),
+        carbonG: Number(carbonG.toFixed(6)),
+        energyKwh: Number(energyKwh.toFixed(8)),
+        dataGb: Number(gb.toFixed(8)),
+        source: 'client-fallback'
+    };
+}
+
+function resolveApiBaseUrl() {
+    const configured = window.ECOTRACK_API_BASE?.trim?.();
+    if (configured) return configured.replace(/\/$/, '');
+
+    const { origin, hostname, port, protocol } = window.location;
+    const isLocalPreview = ['127.0.0.1', 'localhost'].includes(hostname)
+        && ['5500', '5501'].includes(port);
+
+    if (protocol === 'file:' || isLocalPreview) return null;
+    return origin.replace(/\/$/, '');
+}
+
+function buildApiUrl(path) {
+    if (!API_BASE_URL) return null;
+    return `${API_BASE_URL}${path}`;
+}
+
+function isLocalDevServer() {
+    return API_BASE_URL === null;
+}
+
+async function getAuditResult(bytes) {
+    const auditUrl = buildApiUrl('/api/audit');
+    if (!auditUrl || !apiAvailability.audit) {
+        return calculateAuditLocally(bytes);
+    }
+
     try {
-        const response = await fetch('/api/audit', {
+        const response = await fetch(auditUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ bytes })
         });
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!response.ok || !contentType.includes('application/json')) {
+            throw new Error(`Audit API unavailable (${response.status})`);
+        }
+
         const result = await response.json();
+        if (!Number.isFinite(Number(result?.carbonMg))) {
+            throw new Error('Audit API returned invalid carbon data');
+        }
+
+        return result;
+    } catch (err) {
+        apiAvailability.audit = false;
+        console.warn('Falling back to local audit calculation:', err);
+        return calculateAuditLocally(bytes);
+    }
+}
+
+// ── Core update ───────────────────────────────────────────────
+async function updateUI(bytes) {
+    try {
+        const result = await getAuditResult(bytes);
         const carbonMg = parseFloat(result.carbonMg);
         const mb = bytes / (1024 * 1024);
 
@@ -189,7 +261,7 @@ async function updateUI(bytes) {
         });
 
         // ── AI Advisor (auto, once per audit) ──
-        runAIAdvisor(mb, carbonMg, r.grade);
+        runAIAdvisorSafe(mb, carbonMg, r.grade);
 
     } catch (err) {
         console.error('updateUI error:', err);
@@ -198,6 +270,40 @@ async function updateUI(bytes) {
 
 // ── AI Advisor ────────────────────────────────────────────────
 let advisorRan = false;
+
+function buildLocalAdvisorReply(mb, carbonMg, rating) {
+    const transferTip = mb > 2
+        ? 'Your transfer size is heavy, so the biggest win is reducing downloaded assets.'
+        : 'Your transfer size is fairly light, so keeping third-party scripts and images lean will help most.';
+    const sourceTip = carbonMg > 100
+        ? 'The most likely contributors are large images, external libraries, and repeated network requests.'
+        : 'The likely contributors are JavaScript bundles, fonts, and third-party requests.';
+
+    return `**Audit summary:** This page transferred **${mb.toFixed(2)} MB** and produced about **${carbonMg.toFixed(2)} mg CO2**, which maps to a **${rating}** rating. ${transferTip}
+
+**Likely sources:** ${sourceTip} On this page, Firebase, Chart.js, fonts, and any uncached media are the first things to inspect.
+
+**Top fixes:** compress and lazy-load images, self-host or trim third-party libraries, and defer scripts that are not needed for first paint.`;
+}
+
+function buildLocalChatReply(userMsg) {
+    const msg = userMsg.toLowerCase();
+    const rating = getGreenRating(lastCarbonMg).grade;
+
+    if (msg.includes('compare') || msg.includes('average')) {
+        return `Your audit is currently **${lastCarbonMg.toFixed(2)} mg CO2** for **${lastMb.toFixed(2)} MB** transferred, which maps to **${rating}**. As a rule of thumb, keeping transfer size low is the fastest way to beat the average page footprint.`;
+    }
+
+    if (msg.includes('cause') || msg.includes('emission') || msg.includes('source')) {
+        return `The main sources are usually **images**, **JavaScript bundles**, **fonts**, and **third-party scripts**. For this page, Firebase, Chart.js, and any uncached media are the first things worth checking.`;
+    }
+
+    if (msg.includes('tip') || msg.includes('reduce') || msg.includes('optimi')) {
+        return `Start with **image compression**, **lazy loading**, and **deferring non-critical JavaScript**. After that, trim third-party libraries and verify that every external request is necessary on first load.`;
+    }
+
+    return `The latest audit shows **${lastMb.toFixed(2)} MB** transferred and about **${lastCarbonMg.toFixed(2)} mg CO2**, rated **${rating}**. The biggest improvement usually comes from shipping fewer bytes and removing non-essential third-party code.`;
+}
 async function runAIAdvisor(mb, carbonMg, rating) {
     if (advisorRan && !isSimulation) return; // only once in real mode
     advisorRan = true;
@@ -222,15 +328,34 @@ Write a concise analysis in exactly 3 short paragraphs:
 
 Format: Use **bold** for key terms. Max 160 words. Be direct and technical.`;
 
+    const aiUrl = buildApiUrl('/api/ai');
+    if (!aiUrl || !apiAvailability.ai) {
+        const html = buildLocalAdvisorReply(mb, carbonMg, rating)
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .split('\n').filter(l => l.trim())
+            .map(l => `<p>${l}</p>`).join('');
+
+        box.innerHTML = `
+            <div class="ai-result">
+                <div class="ai-result-header">Local analysis · ${new Date().toLocaleTimeString()}</div>
+                ${html}
+            </div>`;
+        return;
+    }
+
     try {
-        const res = await fetch('/api/ai', {
+        const res = await fetch(aiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 
             },
             body: JSON.stringify({
-            message: prompt + "\n\nBe precise and helpful."
+    message: prompt
 })
         });
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok || !contentType.includes('application/json')) {
+            throw new Error(`AI API unavailable (${res.status})`);
+        }
         const data = await res.json();
         const text = data.reply || 'No response.';
 
@@ -281,15 +406,28 @@ Answer in 2-4 sentences. Use **bold** for key terms. Be specific and practical.`
 
     chatHistory.push({ role: 'user', content: userMsg });
 
+    const aiUrl = buildApiUrl('/api/ai');
+    if (!aiUrl || !apiAvailability.ai) {
+        chatLog.removeChild(thinkEl);
+        const reply = buildLocalChatReply(userMsg);
+        chatHistory.push({ role: 'assistant', content: reply });
+        appendMsg(reply, 'ai');
+        return;
+    }
+
     try {
-        const res = await fetch('/api/ai', {
+        const res = await fetch(aiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 
                  },
             body: JSON.stringify({
-  message: systemPrompt + "\n\nUser: " + userMsg
-})
+                message: `${systemPrompt}\n\nUser question: ${userMsg}`
+            })
         });
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok || !contentType.includes('application/json')) {
+            throw new Error(`AI API unavailable (${res.status})`);
+        }
         const data = await res.json();
         const reply = data.reply || 'Sorry, no response.';
         chatHistory.push({ role: 'assistant', content: reply });
@@ -303,21 +441,154 @@ Answer in 2-4 sentences. Use **bold** for key terms. Be specific and practical.`
     }
 }
 
+async function runAIAdvisorSafe(mb, carbonMg, rating) {
+    if (advisorRan && !isSimulation) return;
+    advisorRan = true;
+
+    const box = document.getElementById('ai-advisor-box');
+    box.innerHTML = `
+        <div class="ai-loading">
+            <div class="dots"><span>.</span><span>.</span><span>.</span></div>
+            <span>AI is analysing your audit data...</span>
+        </div>`;
+
+    const aiUrl = buildApiUrl('/api/ai');
+    if (!aiUrl || !apiAvailability.ai) {
+        const html = buildLocalAdvisorReply(mb, carbonMg, rating)
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .split('\n').filter(l => l.trim())
+            .map(l => `<p>${l}</p>`).join('');
+
+        box.innerHTML = `
+            <div class="ai-result">
+                <div class="ai-result-header">Local analysis · ${new Date().toLocaleTimeString()}</div>
+                ${html}
+            </div>`;
+        return;
+    }
+
+    const prompt = `You are EcoTrack's AI Carbon Advisor. A webpage was audited:
+- Data transferred: ${mb.toFixed(2)} MB
+- Carbon impact: ${carbonMg.toFixed(2)} mg CO2
+- Green rating: ${rating}
+- Stack: Firebase SDK, vanilla JS, CSS (typical EcoTrack page)
+
+Write a concise analysis in exactly 3 short paragraphs:
+1. What these numbers mean in plain English
+2. The most likely sources of emissions for this page type
+3. Top 3 specific, actionable optimisation tips
+
+Format: Use **bold** for key terms. Max 160 words. Be direct and technical.`;
+
+    try {
+        const res = await fetch(aiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: prompt })
+        });
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok || !contentType.includes('application/json')) {
+            throw new Error(`AI API unavailable (${res.status})`);
+        }
+
+        const data = await res.json();
+        const text = data.reply || 'No response.';
+        const html = text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .split('\n').filter(l => l.trim())
+            .map(l => `<p>${l}</p>`).join('');
+
+        box.innerHTML = `
+            <div class="ai-result">
+                <div class="ai-result-header">Analysis · ${new Date().toLocaleTimeString()}</div>
+                ${html}
+            </div>`;
+    } catch (error) {
+        apiAvailability.ai = false;
+        const html = buildLocalAdvisorReply(mb, carbonMg, rating)
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .split('\n').filter(l => l.trim())
+            .map(l => `<p>${l}</p>`).join('');
+
+        box.innerHTML = `
+            <div class="ai-result">
+                <div class="ai-result-header">Local analysis · ${new Date().toLocaleTimeString()}</div>
+                ${html}
+            </div>`;
+        console.error('AI Advisor error:', error);
+    }
+}
+
+async function sendMessageSafe(userMsg) {
+    if (!userMsg.trim()) return;
+
+    const aiUrl = buildApiUrl('/api/ai');
+    if (!aiUrl || !apiAvailability.ai) {
+        appendMsg(userMsg, 'user');
+        const reply = buildLocalChatReply(userMsg);
+        chatHistory.push({ role: 'user', content: userMsg });
+        chatHistory.push({ role: 'assistant', content: reply });
+        appendMsg(reply, 'ai');
+        return;
+    }
+
+    appendMsg(userMsg, 'user');
+    const thinkEl = appendMsg('AI thinking...', 'thinking');
+    chatHistory.push({ role: 'user', content: userMsg });
+
+    const systemPrompt = `You are EcoTrack's AI assistant specialising in web carbon emissions and sustainable web development.
+Current audit data:
+- Data transferred: ${lastMb.toFixed(2)} MB
+- Carbon impact: ${lastCarbonMg.toFixed(2)} mg CO2
+- Green rating: ${getGreenRating(lastCarbonMg).grade}
+
+Answer in 2-4 sentences. Use **bold** for key terms. Be specific and practical.`;
+
+    try {
+        const res = await fetch(aiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: `${systemPrompt}\n\nUser question: ${userMsg}`
+            })
+        });
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok || !contentType.includes('application/json')) {
+            throw new Error(`AI API unavailable (${res.status})`);
+        }
+
+        const data = await res.json();
+        const reply = data.reply || 'Sorry, no response.';
+        chatHistory.push({ role: 'assistant', content: reply });
+        chatLog.removeChild(thinkEl);
+        appendMsg(reply, 'ai');
+    } catch (error) {
+        apiAvailability.ai = false;
+        chatLog.removeChild(thinkEl);
+        const reply = buildLocalChatReply(userMsg);
+        chatHistory.push({ role: 'assistant', content: reply });
+        appendMsg(reply, 'ai');
+        console.error('Chat error:', error);
+    }
+}
+
+sendMessage = sendMessageSafe;
+
 document.getElementById('send-btn').addEventListener('click', () => {
     const input = document.getElementById('chat-input');
-    sendMessage(input.value);
+    sendMessageSafe(input.value);
     input.value = '';
 });
 document.getElementById('chat-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') {
         const input = document.getElementById('chat-input');
-        sendMessage(input.value);
+        sendMessageSafe(input.value);
         input.value = '';
     }
 });
 
 // Quick suggestion chips
-window.quickAsk = function(msg) { sendMessage(msg); };
+window.quickAsk = function(msg) { sendMessageSafe(msg); };
 
 // ── Real mode ─────────────────────────────────────────────────
 if (!isSimulation) {
