@@ -1,4 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
 import { getDatabase, ref, set, push } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
 
@@ -7,7 +8,7 @@ import { getDatabase, ref, set, push } from "https://www.gstatic.com/firebasejs/
 //  false → Real mode  (Vercel deployed)
 //  true  → Simulation (local dev / demo)
 // ============================================================
-const isSimulation = true;
+const isSimulation = false;
 
 
 // ── Firebase ──────────────────────────────────────────────────
@@ -23,6 +24,18 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
 const db = getDatabase(app);
+const auth = getAuth(app);
+
+// Redirect to login if not logged in
+onAuthStateChanged(auth, user => {
+  if (!user) window.location.href = 'login.html';
+});
+
+// Logout function
+window.handleLogout = async function() {
+  await signOut(auth);
+  window.location.href = 'login.html';
+};
 const sessionId = "session_" + Date.now();
 document.getElementById('session-label').textContent = sessionId.slice(-8);
 const API_BASE_URL = resolveApiBaseUrl();
